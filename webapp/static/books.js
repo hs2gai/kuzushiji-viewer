@@ -1,5 +1,5 @@
 // 資料の画面（/）の資料一覧。NDL・PDF・アップロード画像を資料ごとにまとめて表示し、改名と削除を行う。
-// 一覧にある資料は、おすすめ（catalog.js のカード）で追加ボタンを隠すのに使う。$・el・setStatus は dom.js。
+// $・el・setStatus は dom.js。
 
 // 以前は / がビューアだったので、ページを指す古い URL（?pid= / ?doc= / ?id=）はビューアに転送する（ブラウザ保存版用。このサーバーはサーバー側で転送する）
 if (['pid', 'doc', 'id'].some((k) => new URLSearchParams(location.search).has(k))) location.replace(`/view${location.search}`);
@@ -9,6 +9,12 @@ const ui = {
   confirmCheckRow: $('#confirm-check-row'), confirmCheck: $('#confirm-check'), confirmCheckLabel: $('#confirm-check-label'),
   filter: $('#filter'), sort: $('#sort'), noMatch: $('#no-match'), file: $('#file'), notice: $('#notice'),
 };
+// フッターのリンク（backend.footerLink: {url, label}。言語によらず同じ表記）
+if (backend.footerLink) {
+  const footer = $('#site-footer');
+  footer.append(el('a', { href: backend.footerLink.url, textContent: backend.footerLink.label }));
+  footer.hidden = false;
+}
 // ブラウザ保存版: 資料はブラウザに保存されること、ただし翻刻時の画像の扱い（backend.notice）
 if (backend.notice) {
   $('#notice-local').hidden = false;

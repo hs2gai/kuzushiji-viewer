@@ -17,6 +17,8 @@ const postJson = (path, data) => api(path, {
 const backend = {
   // 解説の方式。'server': サーバーで claude -p を実行 / 'manual': 利用者が自分の LLM で解説して貼り付ける
   interpretMode: 'server',
+  // 自動翻刻（ページをめくるたびに OCR）の既定。利用者が切り替えたら、その選択を優先する
+  autoOcrDefault: true,
 
   openNdl: (pid, page, ocr) => postJson('/api/ocr/ndl', { pid, page, ocr }),
   openPdf: (doc, page, ocr) => postJson('/api/ocr/pdf', { doc, page, ocr }),

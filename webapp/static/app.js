@@ -928,7 +928,8 @@ function ocrIfNeeded() {
   if (current?.ocr_done === false) enqueueOcr(current);
 }
 restoreSelect(ui.layer, 'layer');
-ui.autoOcr.checked = loadSetting('autoOcr') === '1';  // 既定はオフ。オンに切り替えた人だけオン（選択は change で保存）
+// 既定は backend.autoOcrDefault（個人版はオン、ブラウザ保存版はオフ）。切り替えた人はその選択（change で保存）
+ui.autoOcr.checked = (loadSetting('autoOcr') ?? (backend.autoOcrDefault ? '1' : '0')) === '1';
 ui.layerForm.addEventListener('change', () => {
   saveSetting('layer', ui.layer.value);
   renderOverlay();

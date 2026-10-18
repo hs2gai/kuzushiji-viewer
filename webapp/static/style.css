@@ -1,0 +1,220 @@
+:root {
+  --bg: #f4f1ea;
+  --panel: #fffdf8;
+  --border: #d9d2c5;
+  --accent: #b5452a;
+  --accent-soft: rgba(181, 69, 42, 0.18);
+  --text: #2b2620;
+  --tr-color: #1a1a1a;  /* 翻刻レイヤーの文字色（ツールバーで切替） */
+  --tr-bg: #f3ead6;     /* 翻刻・現代語訳レイヤーの背景色（ツールバーで切替。既定は生成り） */
+  --ctl-h: 32px;  /* ヘッダーの入力欄・ボタン・アイコンの高さ（すべてこれにそろえる） */
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "BIZ UDPMincho", serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* .row などの display 指定より hidden 属性を優先する */
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; overflow: hidden; }
+
+header {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  font-size: 13px;  /* 下段のツールバーと同じ大きさにそろえる */
+}
+header h1 { font-size: 18px; margin: 0 8px 0 0; }
+header .brand { min-width: 0; margin-right: 8px; }
+header .brand h1 { margin: 0; }
+#book-title { margin: 0; font-size: 12.5px; color: #6b6259; max-width: 24em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+input[type="text"], input[type="number"], select { padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+input[type="number"] { width: 64px; }
+/* コマの一覧は ▼ だけ見せる（現在のコマは隣の入力欄に出ている） */
+/* 文字を透明にすると標準の矢印も消えるので、矢印は背景に描く */
+#page-select {
+  width: 28px; margin-left: 2px; color: transparent; cursor: pointer; appearance: none;
+  background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h10L5 6z' fill='%232b2620'/%3E%3C/svg%3E") center / 10px 6px no-repeat;
+}
+#page-select option { color: var(--text); }
+/* 履歴のメニュー（アイコンの下に開く） */
+.history-menu { position: relative; }
+.history-menu .menu {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; width: 360px; max-width: 90vw; max-height: 60vh; overflow-y: auto;
+  background: #fff; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); padding: 4px;
+}
+.history-menu .menu button {
+  display: block; width: 100%; height: auto; text-align: left; border: 0; border-radius: 4px; padding: 6px 8px; background: none; white-space: normal;
+}
+.history-menu .menu button:hover, .history-menu .menu button.current { background: var(--accent-soft); }
+.history-menu .menu .label { display: block; font-size: 13px; }
+.history-menu .menu .excerpt { display: block; font-size: 12px; color: #6b6259; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 言語の切り替え（i18n.js）。ヘッダーの右端に置く */
+header .lang-switch { margin-left: auto; }
+/* 元の資料（NDL デジタルコレクション = N / 次世代デジタルライブラリー = 次）へのリンク。ビューアと資料の画面で共通 */
+.source-icons { display: inline-flex; gap: 6px; }
+.src-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border: 1px solid var(--accent-soft); border-radius: 4px; background: #fff;
+  color: var(--accent); font-size: 13px; font-weight: bold; text-decoration: none;
+}
+.src-icon:hover, .home-icon:hover { background: var(--accent-soft); }
+/* 資料の画面に戻るアイコン（ロゴの右） */
+.home-icon {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-left: -6px;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--accent);
+}
+button { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font: inherit; cursor: pointer; white-space: nowrap; }
+button:hover { border-color: var(--accent); }
+/* アイコンだけのボタン（dom.js の iconButton / data-icon） */
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+.icon-btn:hover:not(:disabled) { background: var(--accent-soft); }
+.icon-btn:disabled { opacity: 0.4; cursor: default; }
+.btn-icon { display: inline-flex; }
+/* アイコンを並べた切り替え（中身はラジオボタン）。ラジオ本体は隠し、選択中のアイコンを色付きにする */
+.choice { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #fff; }
+.choice label { display: inline-flex; cursor: pointer; }
+.choice label + label { border-left: 1px solid var(--border); }
+.choice input { position: absolute; opacity: 0; pointer-events: none; }
+.choice .icon-btn { width: 30px; height: 26px; color: #6b6259; }
+.choice input:checked + .icon-btn { background: var(--accent-soft); color: var(--accent); }
+.choice input:focus-visible + .icon-btn { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* ヘッダーの部品は高さをそろえ、アイコンだけのものは正方形にする */
+header input, header select, header button { height: var(--ctl-h); }
+header .icon-btn, header .home-icon, header .src-icon { width: var(--ctl-h); height: var(--ctl-h); padding: 0; }
+header #page-select { width: 28px; }
+.upload { cursor: pointer; padding: 4px 10px; border: 1px dashed var(--border); border-radius: 4px; }
+.upload input { display: none; }
+
+/* 進捗・エラー表示は固定位置のトーストにしてレイアウトを動かさない */
+#status {
+  position: fixed; top: 12px; right: 16px; z-index: 100; max-width: 420px;
+  padding: 8px 14px; border-radius: 6px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  background: #fff3cd; border: 1px solid #e8d89a; pointer-events: none;
+}
+#status.error { background: #f8d7da; border-color: #e3a4ab; white-space: pre-wrap; pointer-events: auto; cursor: pointer; }
+
+main { flex: 1; display: grid; grid-template-columns: 1fr 380px; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+
+#viewer { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.toolbar { padding: 6px 14px; font-size: 13px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.toolbar input[type="range"] { width: 90px; vertical-align: middle; }
+.zoom { display: inline-flex; align-items: center; gap: 4px; }
+#zoom-level { min-width: 3.2em; text-align: center; font-variant-numeric: tabular-nums; }
+button.icon { width: 26px; height: 26px; padding: 0; line-height: 1; font-size: 15px; }
+#page-info { margin-left: auto; color: #6b6259; }
+#stage { flex: 1; position: relative; min-height: 0; display: flex; }
+#canvas-wrap { flex: 1; overflow: auto; padding: 12px; cursor: grab; user-select: none; }
+#canvas-wrap.panning { cursor: grabbing; }
+
+/* 左右端のコマ送りボタン。行矩形の選択を邪魔しないよう矢印部分だけをクリック対象にする */
+.edge {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1; display: none;
+  align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0;
+  border: 0; border-radius: 50%; background: rgba(0,0,0,.35); color: #fff; font-size: 22px;
+  opacity: .55; transition: opacity .15s, background .15s;
+}
+#edge-left { left: 12px; }
+#edge-right { right: 12px; }
+#stage.pageable .edge { display: flex; }
+.edge:hover { opacity: 1; background: rgba(0,0,0,.55); }
+#canvas { display: block; width: 100%; height: auto; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+
+/* 翻刻レイヤー: 行矩形だけを塗り、図の部分は画像のまま */
+.line-box rect { fill: var(--tr-bg); stroke: var(--accent); stroke-width: 0; }
+.line-box text { fill: var(--tr-color); writing-mode: vertical-rl; text-orientation: upright; pointer-events: none; }
+.line-box.hover rect, .line-box.selected rect { stroke-width: 6; fill: #fff8e1; }
+#overlay.hidden .line-box rect { fill: transparent; }
+#overlay.hidden .line-box text { display: none; }
+#overlay.hidden .line-box.hover rect, #overlay.hidden .line-box.selected rect { fill: var(--accent-soft); }
+/* 現代語訳レイヤー: 本文の領域ごとに板を敷き、訳を縦書きで流し込む（板の外の挿絵は画像のまま） */
+.translation { pointer-events: none; }
+.translation rect { fill: var(--tr-bg); }
+/* 解説タブの英訳（app.js の renderEnglishList）。行にマウスを乗せると、その行を訳した段落をハイライトする */
+#commentary-lang { margin-top: 8px; }
+#commentary-lang button { border: 0; border-radius: 0; padding: 3px 12px; background: none; color: #6b6259; }
+#commentary-lang button + button { border-left: 1px solid var(--border); }
+#commentary-lang button.active { background: var(--accent-soft); color: var(--accent); }
+.english-list { margin-top: 10px; padding-bottom: 40vh;  /* 最後の段落も欄の中央まで送れるように */ font-family: Georgia, 'Times New Roman', serif; font-size: 16px; line-height: 1.5; }
+.english-list p { margin: 0 0 6px; }
+/* 行と連動する訳の段落（英訳・日本語の解説の現代語訳）。行にマウスを乗せると対応する段落をハイライトする */
+.linked { padding: 4px 8px; border-radius: 4px; border-left: 3px solid transparent; cursor: pointer; transition: background-color .2s, border-color .2s; }
+.linked.hover { background: var(--accent-soft); border-left-color: var(--accent); }
+.linked.selected { border-left-color: var(--accent); }
+#interpret-body { padding-bottom: 40vh; }  /* 最後の段落も欄の中央まで送れるように */
+.english-list .uncertain { color: var(--accent); font-weight: bold; font-size: 0.6em; vertical-align: super; cursor: help; }
+.translation text { fill: var(--tr-color); writing-mode: vertical-rl; text-orientation: upright; }
+/* 推定で読んだ箇所の印（app.js の UNCERTAIN）。疑問文の「？」と紛れないよう、小さく薄い朱色にする */
+.translation .uncertain { fill: var(--accent); font-weight: bold; }  /* 大きさと位置は app.js の verticalText で決める */
+.markdown .uncertain { color: var(--accent); font-weight: bold; font-size: 0.6em; vertical-align: super; cursor: help; }
+
+/* 全コマの縮小画像の帯（画像の下）。右開きはコマ 1 を右端に置く */
+#thumbs { flex: none; display: flex; gap: 6px; overflow-x: auto; padding: 6px 12px; border-top: 1px solid var(--border); background: var(--panel); }
+#thumbs.rtl { flex-direction: row-reverse; }
+.thumb {
+  flex: none; width: 70px; padding: 3px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 4px; background: #fff; cursor: pointer; font-size: 11px; color: #6b6259;
+}
+.thumb img { width: 62px; height: 62px; object-fit: contain; background: var(--bg); }
+.thumb:not([data-state="done"]) img { visibility: hidden; }  /* 読み込み前・失敗時は枠だけ出す */
+.thumb.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--accent); }
+.thumb:hover { border-color: var(--accent); }
+/* 翻刻の状態（app.js の markThumb）をコマ番号の横に出す */
+.thumb[data-ocr="queued"] span::after { content: ' 待ち'; }
+.thumb[data-ocr="running"] span::after { content: ' 翻刻中'; color: var(--accent); animation: pulse 1s ease-in-out infinite alternate; }
+.thumb[data-ocr="done"] span::after { content: ' ✓'; color: #1f7a3a; }
+.thumb[data-ocr="error"] span::after { content: ' ×'; color: var(--accent); }
+#ocr-progress { color: var(--accent); animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.4; } }
+#thumb-preview {
+  position: fixed; z-index: 20; pointer-events: none; padding: 4px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: #fff; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); font-size: 12px; color: #6b6259;
+}
+#thumb-preview img { display: block; height: 160px; }  /* 幅は app.js が縦横比から決める */
+
+#panel { display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--panel); min-height: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--border); }
+.tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px; }
+.tabs button.active { border-bottom-color: var(--accent); color: var(--accent); }
+.tab { display: none; flex: 1; overflow: auto; padding: 10px 14px; }
+.tab.active { display: block; }
+
+#line-list { margin: 0; padding-left: 2em; line-height: 1.7; }
+#line-list li { cursor: pointer; padding: 1px 4px; border-radius: 3px; }
+#line-list li.hover, #line-list li.selected { background: var(--accent-soft); }
+
+#tab-lines .row { margin-bottom: 6px; }
+
+#interpret-status { font-size: 13px; color: #6b6259; }
+.note { font-size: 12.5px; color: #6b6259; margin: 8px 0 0; line-height: 1.6; }
+#interpret-input { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; font: inherit; font-size: 13px; }
+#interpret-editor .row, #interpret-manual > .row { margin-top: 8px; }
+header #notice { margin: 0; }
+.markdown { line-height: 1.5; margin-top: 10px; font-size: 17px; }
+.markdown h2 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 2px; margin: 18px 0 8px; }
+.markdown ol, .markdown ul { padding-left: 1.6em; }
+.markdown strong { color: var(--accent); }
+
+/* スマホ幅: 固定高の2ペインをやめ、画像→パネルの順にページ全体を縦スクロールさせる */
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  body { display: block; overflow: auto; }
+  header { padding: 6px 10px; gap: 6px 10px; }
+  /* 戻るアイコンとタイトルで 1 行を占め、操作類は次の行から並べる */
+  header > h1, header > .brand { width: calc(100% - var(--ctl-h) - 10px); margin: 0; }
+  header h1 { font-size: 16px; }
+  #book-title { max-width: none; }
+  .history-menu .menu { width: 90vw; }
+  main { display: block; }
+  #viewer { display: block; }
+  header, .toolbar { font-size: 12px; }
+  .toolbar { gap: 4px 10px; padding: 6px 10px; }
+  .toolbar input[type="range"] { width: 70px; }
+  #page-info { margin-left: 0; width: 100%; }
+  #stage { display: block; }
+  #canvas-wrap { overflow: visible; padding: 6px; }
+  #panel { display: block; border-left: 0; border-top: 1px solid var(--border); }
+  .tab { overflow: visible; }
+}
+
+/* ブラウザ保存版: OCR 前の確認ダイアログ */
+dialog.human-check { border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+dialog.human-check p { margin: 0 0 12px; }

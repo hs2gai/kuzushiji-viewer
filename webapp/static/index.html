@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>くずし字ビューア</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/books.css">
+</head>
+<body class="books">
+<header>
+  <h1>くずし字ビューア</h1>
+  <!-- 古典籍の検索（次世代デジタルライブラリー）。結果は /search で開く -->
+  <form class="header-search" action="/search" role="search">
+    <input id="search-q" name="q" type="search" placeholder="古典籍を探す（書名・著者など）" aria-label="古典籍を探す" required>
+    <button type="submit">検索</button>
+  </form>
+</header>
+
+<div id="status" hidden></div>
+
+<!-- 1. 資料（追加した本・ビューアで開いた本・アップロードした画像と PDF） -->
+<section class="section">
+  <div class="row">
+    <h2>資料</h2>
+    <span id="summary" class="note"></span>
+    <input id="filter" type="search" placeholder="書名・著者・ID で絞り込み" aria-label="資料の絞り込み">
+    <select id="sort" aria-label="並び順">
+      <option value="opened_at">最近開いた順</option>
+      <option value="updated_at">更新した順</option>
+      <option value="added_at">追加した順</option>
+      <option value="name">名前順</option>
+    </select>
+    <label class="upload" title="OCR してからビューアで開きます（画面にドラッグ＆ドロップしても開けます）">画像/PDF を開く <input id="file" type="file" accept="image/*,application/pdf,.pdf"></label>
+    <button id="disclaimer-toggle" class="icon" type="button" aria-controls="disclaimer" title="注意書きを表示・隠す">⚠</button>
+  </div>
+  <!-- 注意書き。「⚠」で開閉し、状態はブラウザに保存する（books.js）。最後の 2 項目はブラウザ保存版だけ（books.js が出す） -->
+  <ul id="disclaimer" class="disclaimer">
+    <li>くずし字が混在する古典籍について、まずは何が書かれているのか知りたい人のためのツールです。</li>
+    <li>実験的に機械的処理を優先しているため正確さが犠牲になっています。</li>
+    <li>誤訳や誤植を多く含むため正確なテキストが必要な場合は原典や専門の研究書を参照するようにしてください。</li>
+    <li id="notice-local" hidden>開いたPDFや画像はローカルで処理されるためサーバーには保存されません。</li>
+    <li id="notice" hidden></li>
+  </ul>
+  <!-- 見本（OCR・校正・現代語訳まで済ませた資料）。取り込めるブラウザ保存版だけに出す（presets.js） -->
+  <div id="samples" class="catalog" hidden></div>
+  <div id="book-list"></div>
+  <p id="no-match" class="empty" hidden>条件に合う資料はありません。</p>
+</section>
+
+<!-- 2. おすすめの古典籍（初めての人向け）。追加するかは利用者が決める。開閉の状態はブラウザに保存する -->
+<section class="section">
+  <details id="presets-box" class="accordion" open>
+    <summary><h2>おすすめの古典籍</h2></summary>
+    <p class="note">何から読めばよいか迷ったら、絵と文が並んだ次の本から試してみてください。「開く」で見どころのコマを表示します。</p>
+    <div id="presets" class="catalog"></div>
+  </details>
+</section>
+
+<!-- ポータル（hs2g.com）へ戻るリンク。言語によらず同じ表記（ほかのアプリと共通） -->
+<footer class="site-footer"><a href="https://hs2g.com/">hs2g.com</a></footer>
+
+<!-- 削除・全ページの処理の確認。ブラウザの confirm は使わず、内容を示してから実行する。実行のボタンは books.js が入れる -->
+<dialog id="confirm">
+  <form method="dialog">
+    <p id="confirm-text"></p>
+    <label id="confirm-check-row" class="check" hidden><input id="confirm-check" type="checkbox"> <span id="confirm-check-label"></span></label>
+    <div id="confirm-buttons" class="row end">
+      <button id="confirm-cancel" value="cancel">やめる</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/dom.js"></script>
+<script src="/static/backend.js"></script>
+<script src="/static/catalog.js"></script>
+<script src="/static/presets.js"></script>
+<script src="/static/books.js"></script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>くずし字ビューア</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css">
+<!-- CDN のライブラリはバージョンを固定し、integrity で改ざんを検知する（更新時はハッシュも取り直す） -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.15/dist/purify.min.js" integrity="sha384-uUMu9JDY09vBzRf9SPcK2VgUj+W/70J6Soc+Dded5P474ElQ63iv9j5N3DE7Kp3N" crossorigin="anonymous"></script>
+</head>
+<body>
+<header>
+  <!-- 資料の画面（/）に戻るアイコン（本棚の形） -->
+  <a class="home-icon" href="/" title="資料の画面に戻る" aria-label="資料の画面に戻る">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+      <rect x="3" y="4" width="4" height="16"/><rect x="9" y="4" width="4" height="16"/><path d="M15.5 5.2l3.8-1 3.6 14.6-3.8 1z"/>
+    </svg>
+  </a>
+  <!-- ロゴの下に表示中の資料の書名を出す -->
+  <div class="brand">
+    <h1>くずし字ビューア</h1>
+    <p id="book-title" hidden></p>
+  </div>
+  <form id="ndl-form" class="row">
+    <!-- 表示中の NDL 資料の pid（資料は資料の画面から開くので入力欄は出さない） -->
+    <input id="pid" type="hidden">
+    <!-- コマ数がわかる資料では、数字の入力の横に 1〜コマ数の一覧（page-select）を出す -->
+    <label>コマ <input id="page" type="number" min="1" value="1" required><select id="page-select" hidden></select></label>
+    <button type="button" id="nav-left" data-icon="left">◀</button>
+    <button type="button" id="nav-right" data-icon="right">▶</button>
+    <select id="binding" title="綴じ方向（矢印の進む向き）">
+      <option value="rtl">右開き（縦書き）</option>
+      <option value="ltr">左開き（横書き）</option>
+    </select>
+  </form>
+  <!-- 履歴（読み込んだページ）。アイコンを押すとメニューが開く -->
+  <div class="history-menu">
+    <button type="button" id="history-btn" data-icon="history" aria-haspopup="true" aria-expanded="false">履歴</button>
+    <div id="history-list" class="menu" role="menu" hidden></div>
+  </div>
+  <span id="source-links" class="source-icons" hidden>
+    <a id="source-link" class="src-icon" target="_blank" rel="noopener" title="NDL デジタルコレクションでこのコマを開く">N</a>
+    <a id="lab-link" class="src-icon" target="_blank" rel="noopener" title="次世代デジタルライブラリーでこのコマを開く">次</a>
+  </span>
+  <span id="notice" class="note" hidden></span>
+</header>
+
+<div id="status" hidden></div>
+
+<main>
+  <section id="viewer">
+    <div class="toolbar row">
+      <label title="ページをめくるたびに OCR で翻刻する（オフなら画像だけ表示し、レイヤーを「翻刻」に切り替えた時点で OCR する）"><input id="auto-ocr" type="checkbox"> 自動翻刻</label>
+      <!-- 画像に重ねるレイヤー。現代語訳は解説の「現代語訳」を、行には合わせず本文の領域ごとに流し込む -->
+      <!-- 中身はラジオボタン。見た目はアイコンを並べた切り替え（選択中を色付き表示） -->
+      <form id="layer-form" class="choice" role="radiogroup" aria-label="レイヤー">
+        <label><input type="radio" name="layer" value="none"><span data-icon="layerNone">レイヤーなし</span></label>
+        <label><input type="radio" name="layer" value="transcription" checked><span data-icon="layerText">翻刻</span></label>
+        <label><input type="radio" name="layer" value="translation"><span data-icon="layerTranslate">現代語訳</span></label>
+      </form>
+      <label id="corrected-wrap" title="LLM で校正した翻刻を表示する（オフで OCR の原文）" hidden><input id="use-corrected" type="checkbox" checked> 校正版</label>
+      <label>不透明度 <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.85"></label>
+      <label title="文字の大きさ（現代語訳は全文が本文の領域に収まる大きさまで自動で小さくする）">文字 <input id="font-scale" type="range" min="0.5" max="1.2" step="0.05" value="0.8"></label>
+      <label>字間 <input id="letter-spacing" type="range" min="0" max="1" step="0.05" value="0.02"></label>
+      <label>色 <select id="text-color" title="翻刻・現代語訳の文字色">
+        <option value="#1a1a1a">黒</option>
+        <option value="#1f4e9c">青</option>
+        <option value="#1f7a3a">緑</option>
+        <option value="#e8541e">朱</option>
+        <option value="#ffffff">白</option>
+      </select></label>
+      <label>背景 <select id="bg-color" title="翻刻・現代語訳の背景色">
+        <option value="#f3ead6" selected>生成り</option>
+        <option value="#ffffff">白</option>
+        <option value="#fff4c2">薄黄</option>
+        <option value="#e4e4e4">薄灰</option>
+        <option value="#1a1a1a">黒</option>
+      </select></label>
+      <span class="zoom" role="group" aria-label="拡大">
+        <button type="button" id="zoom-out" class="icon" title="縮小">−</button>
+        <span id="zoom-level">100%</span>
+        <button type="button" id="zoom-in" class="icon" title="拡大">＋</button>
+        <button type="button" id="zoom-fit" class="icon" title="ページ全体を表示">⤢</button>
+      </span>
+      <span id="page-info"></span>
+      <span id="ocr-progress" hidden></span>
+    </div>
+    <div id="stage">
+      <div id="canvas-wrap">
+        <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+          <image id="page-image"></image>
+          <g id="overlay"></g>
+        </svg>
+      </div>
+      <!-- 漫画ビューア風: 左右端の矢印ボタンでコマ送り（NDL 資料のときだけ有効） -->
+      <button type="button" id="edge-left" class="edge">◀</button>
+      <button type="button" id="edge-right" class="edge">▶</button>
+    </div>
+    <!-- 全コマの縮小画像（NDL・PDF のとき）。見えている枠の分だけ読み込む -->
+    <div id="thumbs" hidden></div>
+    <!-- 縮小画像にマウスを乗せたときの拡大表示（取得した原寸で出す） -->
+    <div id="thumb-preview" hidden><img alt=""><span></span></div>
+  </section>
+
+  <aside id="panel">
+    <nav class="tabs">
+      <button data-tab="lines" class="active">行一覧</button>
+      <button data-tab="interpret">🤖 解説</button>
+    </nav>
+    <div id="tab-lines" class="tab active">
+      <div class="row">
+        <button id="copy-text">コピー</button>
+        <label><input type="checkbox" id="copy-numbered"> 行番号あり</label>
+      </div>
+      <ol id="line-list"></ol>
+    </div>
+    <div id="tab-interpret" class="tab">
+      <!-- server 方式（個人版）: サーバーで LLM を実行 -->
+      <div id="interpret-server" class="row">
+        <button id="interpret-btn">AIに解説依頼</button>
+        <button id="reinterpret-btn" title="キャッシュを無視して再実行">再実行</button>
+        <span id="interpret-status"></span>
+      </div>
+      <!-- manual 方式（ブラウザ保存版）: 利用者が自分の LLM に依頼し、返答を貼り付けてこのブラウザに保存 -->
+      <div id="interpret-manual" hidden>
+        <p class="note">お使いの LLM（Claude・ChatGPT など）に解説を依頼し、返答を貼り付けて保存できます。解説はこのブラウザにだけ保存されます。<br>
+          ① 「依頼文をコピー」して LLM に貼り付け（画像も添付すると精度が上がります）② 返答を下に貼り付けて「保存」</p>
+        <div class="row">
+          <button id="copy-prompt">依頼文をコピー</button>
+          <a id="open-image" target="_blank" rel="noopener" title="LLM に添付する画像を別タブで開く">画像を開く ↗</a>
+          <button id="edit-interpret" hidden>編集</button>
+        </div>
+        <div id="interpret-editor">
+          <textarea id="interpret-input" rows="10" placeholder="LLM の返答（Markdown）をここに貼り付け。空にして保存すると解説を削除します"></textarea>
+          <div class="row">
+            <button id="save-interpret">保存</button>
+            <button id="cancel-interpret" hidden>取消</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">※ 現代語訳・要約・注記は LLM が生成したもので、完璧ではありません（もっともらしい誤りを含むことがあります）。最終的な確認は画像で行ってください。</p>
+      <!-- 解説の言語（英訳があるページだけ出す）。English は英訳の段落を行と連動させて表示する（行にマウスを乗せると対応する段落を示す） -->
+      <div id="commentary-lang" class="choice" role="tablist" hidden>
+        <button type="button" data-clang="ja">日本語</button>
+        <button type="button" data-clang="en">English</button>
+      </div>
+      <div id="interpret-body" class="markdown"></div>
+      <div id="english-body" class="english-list" hidden></div>
+    </div>
+  </aside>
+</main>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/dom.js"></script>
+<script src="/static/backend.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

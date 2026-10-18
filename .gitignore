@@ -1,0 +1,37 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+
+# Windows ネイティブ環境（setup_windows.ps1）
+.venv/
+
+# ダウンロードしたモデルファイル
+src/ndl_kotenseki_layout/models/*.pth
+src/text_kotenseki_recognition/model-ver2.zip
+src/text_kotenseki_recognition/model-ver2/
+
+# 一時ファイル
+_*/
+
+# くずし字ビューア（webapp）の画像キャッシュと DB
+webapp/cache/
+webapp/koten.db
+
+# Playwright MCP の出力
+.playwright-mcp/
+
+# 手元で取得した資料の画像と PDF
+downloads/
+
+# サンプル画像（手元での計測用）と過去の推論出力
+sample/
+out/
+
+# 環境ごとの値（キーを含む）。絶対にコミットしない
+.env*
+.dev.vars*
+
+# Docker 環境（本家のもの。このリポジトリでは使わないので管理外。ローカルには残してよい）
+docker/

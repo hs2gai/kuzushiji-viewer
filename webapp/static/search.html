@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>古典籍を探す — くずし字ビューア</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/books.css">
+</head>
+<body class="books">
+<header>
+  <!-- 資料の画面（/）に戻るアイコン（本棚の形。ビューアと同じ） -->
+  <a class="home-icon" href="/" title="資料の画面に戻る" aria-label="資料の画面に戻る">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+      <rect x="3" y="4" width="4" height="16"/><rect x="9" y="4" width="4" height="16"/><path d="M15.5 5.2l3.8-1 3.6 14.6-3.8 1z"/>
+    </svg>
+  </a>
+  <h1>くずし字ビューア</h1>
+  <form class="header-search" action="/search" role="search">
+    <input id="search-q" name="q" type="search" placeholder="古典籍を探す（書名・著者など）" aria-label="古典籍を探す" required>
+    <button type="submit">検索</button>
+  </form>
+</header>
+
+<div id="status" hidden></div>
+
+<!-- 次世代デジタルライブラリーで探した NDL デジタルコレクションの古典籍。開くと資料に加わる -->
+<section class="section">
+  <p id="search-summary" class="note"></p>
+  <div id="search-results" class="catalog"></div>
+  <div class="row center"><button id="search-more" hidden>さらに表示</button></div>
+  <p class="note">NDL デジタルコレクションの古典籍を、<a href="https://lab.ndl.go.jp/dl/" target="_blank" rel="noopener">次世代デジタルライブラリー</a>の検索 API で探しています。</p>
+</section>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/dom.js"></script>
+<script src="/static/backend.js"></script>
+<script src="/static/catalog.js"></script>
+<script src="/static/search.js"></script>
+</body>
+</html>

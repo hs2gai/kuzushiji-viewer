@@ -1,0 +1,7 @@
+# くずし字ビューア（webapp）用の追加パッケージ
+# 下限はセキュリティ修正を含む版（fastapi は JSON の API で Content-Type を確かめる版）
+fastapi>=0.132
+uvicorn[standard]>=0.30
+python-multipart>=0.0.18
+pymupdf>=1.24
+truststore

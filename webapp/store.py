@@ -9,6 +9,7 @@
 # opened_books    : 資料をビューアで最後に開いた日時とページ（一覧の「最近開いた順」と、続きから開くのに使う）
 # book_metadata   : 資料のメタデータ（NDL の IIIF マニフェストの metadata をすべて [項目, 値] の JSON で）。一度取得したら NDL に問い合わせない
 # page_counts     : 資料の総ページ数（NDL はマニフェストのコマ数、PDF はページ数）。一覧で「全ページ済み」かを見るのに使い、一度数えたら数え直さない
+# book_categories : 資料の分類（利用者が付ける名前。料理書・読み物など）。一覧の絞り込みに使う
 # 画像ファイル自体は webapp/cache/<id>.jpg に置き、DB には持たない。
 
 import json
@@ -70,6 +71,11 @@ CREATE TABLE IF NOT EXISTS book_metadata (
 CREATE TABLE IF NOT EXISTS page_counts (
     id          TEXT PRIMARY KEY,       -- 'ndl:<pid>' | 'pdf:<hash>'
     count       INTEGER NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS book_categories (
+    id          TEXT PRIMARY KEY,       -- 'ndl:<pid>' | 'pdf:<hash>' | 'up:<item_id>'
+    category    TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
 '''
@@ -195,6 +201,18 @@ class Store:
     def delete_page_count(self, book_id):
         with self._lock:
             self._conn.execute('DELETE FROM page_counts WHERE id = ?', (book_id,))
+            self._conn.commit()
+
+    def list_book_categories(self):
+        """{資料 ID: 分類}"""
+        return {r['id']: r['category'] for r in self._conn.execute('SELECT id, category FROM book_categories')}
+
+    def set_book_category(self, book_id, category):
+        with self._lock:
+            if category:
+                self._conn.execute('INSERT OR REPLACE INTO book_categories VALUES (?,?,?)', (book_id, category, self._now()))
+            else:
+                self._conn.execute('DELETE FROM book_categories WHERE id = ?', (book_id,))  # 空文字は分類を外す
             self._conn.commit()
 
     def get_interpretation(self, item_id):

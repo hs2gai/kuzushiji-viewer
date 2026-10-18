@@ -139,7 +139,8 @@ function showPage(data, fromHistory = false) {
   if (data.ocr_done === false) {
     // OCR 未実行: 解説は出せないのでボタンを無効化し、案内だけ出す
     stopPolling();
-    ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = ui.copyPrompt.disabled = true;
+    ui.copyPrompt.disabled = true;
+    ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = !batch.pages.size;  // 帯でコマを選んでいれば、まとめての依頼はできる
     if (manualInterpret) renderManual('');
     if (ui.autoOcr.checked) enqueueOcr(data);
     renderOcrProgress();  // 翻刻待ちか未実行かの案内を出す
@@ -748,7 +749,7 @@ function stopPolling() {
 
 function renderInterpret(state) {
   const busy = state.status === 'queued' || state.status === 'running';
-  ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = busy;
+  ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = busy && !batch.pages.size;  // 帯でコマを選んでいれば、まとめての依頼はできる
   if (state.status === 'none' || state.status === 'error') {
     ui.interpretBody.innerHTML = '';
     ui.interpretStatus.textContent = '';
@@ -993,6 +994,7 @@ function renderThumbs(data) {
     thumbs?.observer.disconnect();
     ui.thumbs.replaceChildren();
     thumbs = key ? buildThumbs(key, data) : null;
+    clearThumbSelection();  // 選んだコマは資料ごと
   }
   if (!thumbs) return;
   ui.thumbs.querySelector('.current')?.classList.remove('current');
@@ -1019,7 +1021,7 @@ function buildThumbs(key, data) {
       el('img', { alt: '' }), el('span', { textContent: page }),
     ]);
     item.dataset.page = page;
-    item.addEventListener('click', () => goToPage(page));
+    item.addEventListener('click', (e) => selectThumb(page, e) || goToPage(page));
     item.addEventListener('mouseenter', () => showThumbPreview(item));
     item.addEventListener('mouseleave', hideThumbPreview);
     ui.thumbs.append(item);
@@ -1034,6 +1036,103 @@ function buildThumbs(key, data) {
   });
   return state;
 }
+
+// ---------- 選んだコマをまとめて解説に回す ----------
+// 帯の枠を Shift+クリックで範囲（前に押したコマ、無ければ表示中のコマから）、Ctrl（Mac は ⌘）+クリックで 1 コマずつ選ぶ。
+// 選んでいる間は「AIに解説依頼」（「再実行」は解説済みも作り直す）が、選んだコマをまとめて処理する。
+// 処理は資料の一括処理（翻刻がまだなら翻刻してから解説）としてサーバーで行う。サーバーで処理する backend だけ。
+// 修飾キー無しで枠を押す・Esc で選択を解く
+const canRunBookJob = Boolean(backend.startBookJob);
+const BOOK_JOB_POLL_MS = 3000;
+const INTERPRET_LABEL = ui.interpretBtn.textContent;
+const batch = { pages: new Set(), anchor: null, key: null, timer: null };
+const batchUi = { status: $('#batch-status'), text: $('#batch-status-text'), cancel: $('#batch-cancel') };
+const pageUnit = () => t(current?.source_type === 'pdf' ? 'ページ' : 'コマ');
+
+// 修飾キー付きのクリックなら選択を変えて true を返す（そのときはページを移らない）
+function selectThumb(page, e) {
+  if (!canRunBookJob || !(e.shiftKey || e.ctrlKey || e.metaKey)) {
+    batch.anchor = page;
+    if (!batch.timer) clearThumbSelection();
+    return false;
+  }
+  if (batch.timer) return true;  // 処理中は選び直さない
+  if (e.shiftKey) {
+    const from = batch.anchor ?? current.page;
+    for (let p = Math.min(from, page); p <= Math.max(from, page); p++) batch.pages.add(p);
+  } else if (!batch.pages.delete(page)) {
+    batch.pages.add(page);
+  }
+  batch.anchor = page;
+  document.querySelector('.tabs button[data-tab="interpret"]').click();  // 依頼のボタンを見せる
+  renderThumbSelection();
+  return true;
+}
+
+function clearThumbSelection() {
+  if (!batch.pages.size) return;
+  batch.pages.clear();
+  renderThumbSelection();
+}
+
+// 選んだコマに印を付け、解説のボタンの文言と押せるかを選択に合わせる
+function renderThumbSelection() {
+  for (const item of ui.thumbs.children) item.classList.toggle('selected', batch.pages.has(Number(item.dataset.page)));
+  const n = batch.pages.size;
+  ui.interpretBtn.textContent = n ? t('AIに解説依頼（{n} {unit}）', { n, unit: pageUnit() }) : t(INTERPRET_LABEL);
+  if (n) ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = Boolean(batch.timer);
+  else if (current?.ocr_done === false) ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = true;  // 表示中のページの状態に戻す
+  else if (current) syncInterpret();
+  if (batch.timer) return;  // 処理中は進み具合を出している
+  batchUi.status.hidden = !n;
+  batchUi.cancel.hidden = true;
+  batchUi.text.textContent = t('{n} {unit}を選択中です。「AIに解説依頼」でまとめて解説します（Esc で解除）', { n, unit: pageUnit() });
+}
+
+async function startBatch(redo) {
+  if (batch.timer) return;
+  const key = `${current.source_type}:${current.pid}`;
+  ui.interpretBtn.disabled = ui.reinterpretBtn.disabled = true;
+  let state;
+  try { state = await backend.startBookJob(key, ['ocr', 'interpret'], redo, [...batch.pages].sort((a, b) => a - b)); } catch (e) {
+    setStatus(e.message, true);
+    renderThumbSelection();
+    return;
+  }
+  batch.key = key;
+  watchBatch(state);
+}
+
+// 処理の進み具合を解説のボタンの下に出す。終わったら選択を解き、表示中のページの解説を読み直す
+function watchBatch(state) {
+  const unit = pageUnit();
+  if (state.status === 'running') {
+    batchUi.status.hidden = false;
+    batchUi.cancel.hidden = false;
+    batchUi.text.textContent = t('まとめて解説中 {done} / {total} {unit}', { done: state.done + state.failed.length, total: state.total, unit })
+      + (state.running.length ? t('（{pages} {unit}目を処理中）', { pages: state.running.join('・'), unit }) : '');
+    batch.timer = setTimeout(async () => {
+      let next;
+      try { next = await backend.getBookJob(batch.key); } catch (e) { setStatus(e.message, true); next = { status: 'done', done: 0, failed: [] }; }
+      watchBatch(next);
+    }, BOOK_JOB_POLL_MS);
+    return;
+  }
+  batch.timer = null;
+  const failed = state.failed.map((f) => `${f.page} ${unit}: ${f.error}`).join('\n');
+  setStatus(t(state.status === 'canceled' ? 'まとめての解説を中止しました（{done} {unit}済み）' : 'まとめての解説が終わりました（{done} {unit}）', { done: state.done, unit })
+    + (failed ? `\n${failed}` : ''), Boolean(failed));
+  clearThumbSelection();
+}
+
+batchUi.cancel.addEventListener('click', async () => {
+  batchUi.cancel.disabled = true;
+  try { await backend.cancelBookJob(batch.key); } catch (e) { setStatus(e.message, true); }
+  batchUi.cancel.disabled = false;
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && batch.pages.size && !batch.timer && !e.target.closest('input, textarea, dialog')) clearThumbSelection();
+});
 
 // 帯の枠は小さく表示しているので、マウスを乗せた枠だけ取得した原寸（高さ 160px）で枠の上に浮かせて出す。
 // 帯は横スクロールのため中で拡大すると上下が切れる。そこで帯の外の要素に出す
@@ -1210,6 +1309,43 @@ ui.canvasWrap.addEventListener('wheel', (e) => {
   setZoom(zoom + ZOOM_STEP * (e.deltaY < 0 ? 1 : -1), { x: e.clientX, y: e.clientY });
 }, { passive: false });
 
+// ---------- パネルの幅 ----------
+// パネルの左端をドラッグして幅を変える（矢印キーでも変えられる。ダブルクリックで既定の幅に戻す）。幅はブラウザに保存する。
+// 画像の欄が狭くなりすぎないよう、残す幅は CSS（main の grid-template-columns）でも抑える
+const PANEL_WIDTH_KEY = 'panelWidth';
+const PANEL_MIN = 260;
+const PANEL_KEY_STEP = 20;
+const panelResizer = $('#panel-resizer');
+const mainBox = $('main');
+function setPanelWidth(px) {
+  if (px == null) { mainBox.style.removeProperty('--panel-w'); return; }
+  mainBox.style.setProperty('--panel-w', `${Math.round(Math.max(PANEL_MIN, px))}px`);
+}
+const panelWidth = () => $('#panel').getBoundingClientRect().width;
+const savePanelWidth = () => saveSetting(PANEL_WIDTH_KEY, String(Math.round(panelWidth())));
+if (Number(loadSetting(PANEL_WIDTH_KEY))) setPanelWidth(Number(loadSetting(PANEL_WIDTH_KEY)));
+panelResizer.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  panelResizer.setPointerCapture(e.pointerId);
+  document.body.classList.add('resizing');
+  const right = mainBox.getBoundingClientRect().right;
+  const move = (ev) => setPanelWidth(right - ev.clientX);
+  panelResizer.addEventListener('pointermove', move);
+  panelResizer.addEventListener('pointerup', () => {
+    panelResizer.removeEventListener('pointermove', move);
+    document.body.classList.remove('resizing');
+    savePanelWidth();
+  }, { once: true });
+});
+panelResizer.addEventListener('dblclick', () => { setPanelWidth(null); saveSetting(PANEL_WIDTH_KEY, ''); });
+panelResizer.addEventListener('keydown', (e) => {
+  const step = { ArrowLeft: PANEL_KEY_STEP, ArrowRight: -PANEL_KEY_STEP }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  setPanelWidth(panelWidth() + step);
+  savePanelWidth();
+});
+
 // ---------- 手のひらツール ----------
 // 拡大して画像がはみ出したとき、ドラッグでスクロールできるようにする。
 // 少しでも動かしたらドラッグ扱いにし、直後の click（行選択）は抑止する。
@@ -1237,8 +1373,9 @@ ui.copyPrompt.addEventListener('click', copyPrompt);
 ui.editInterpret.addEventListener('click', editInterpret);
 ui.saveInterpret.addEventListener('click', saveInterpret);
 ui.cancelInterpret.addEventListener('click', () => renderManual(current?.interpretation));
-ui.interpretBtn.addEventListener('click', () => interpret(false));
-ui.reinterpretBtn.addEventListener('click', () => interpret(true));
+// 帯でコマを選んでいれば、選んだコマをまとめて処理する
+ui.interpretBtn.addEventListener('click', () => (batch.pages.size ? startBatch(false) : interpret(false)));
+ui.reinterpretBtn.addEventListener('click', () => (batch.pages.size ? startBatch(true) : interpret(true)));
 ui.commentaryLang.addEventListener('click', (e) => {
   const code = e.target.closest('button')?.dataset.clang;
   if (!code) return;

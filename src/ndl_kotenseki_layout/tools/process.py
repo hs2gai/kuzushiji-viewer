@@ -124,7 +124,7 @@ def convert_to_coordlist(result, score_thr: float = 0.3):
 
 
 def run_layout_detection(img_paths: List[str] = None, list_path: str = None, output_path: str = "layout_prediction.json",
-                         config: str = './models/ndl_kotenseki_layout_config.py',
+                         config: str = './models/ndl_kotenseki_layout_config_v3.py',
                          checkpoint: str = './models/ndl_kotenseki_layout_v1.pth',
                          device: str = 'cuda:0', score_thr: float = 0.3, use_show: bool = False, dump_dir: str = None):
     detector = LayoutDetector(config, checkpoint, device)

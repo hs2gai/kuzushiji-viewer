@@ -105,6 +105,8 @@
   </section>
 
   <aside id="panel">
+    <!-- 左端をドラッグしてパネルの幅を変える（ダブルクリックで元の幅。幅はブラウザに保存する。app.js） -->
+    <div id="panel-resizer" role="separator" aria-orientation="vertical" aria-label="パネルの幅を変える" title="ドラッグで幅を変更（ダブルクリックで元に戻す）" tabindex="0"></div>
     <nav class="tabs">
       <button data-tab="lines" class="active">行一覧</button>
       <button data-tab="interpret">🤖 解説</button>
@@ -123,6 +125,8 @@
         <button id="reinterpret-btn" title="キャッシュを無視して再実行">再実行</button>
         <span id="interpret-status"></span>
       </div>
+      <!-- 縮小画像の帯で選んだコマ（Shift で範囲、Ctrl で 1 コマずつ）。選んでいる間は上のボタンでまとめて解説に回す（app.js） -->
+      <p id="batch-status" class="note" hidden><span id="batch-status-text"></span> <button id="batch-cancel" type="button" hidden>中止</button></p>
       <!-- manual 方式（ブラウザ保存版）: 利用者が自分の LLM に依頼し、返答を貼り付けてこのブラウザに保存 -->
       <div id="interpret-manual" hidden>
         <p class="note">お使いの LLM（Claude・ChatGPT など）に解説を依頼し、返答を貼り付けて保存できます。解説はこのブラウザにだけ保存されます。<br>

@@ -45,6 +45,9 @@
   </ul>
   <!-- 見本（OCR・校正・現代語訳まで済ませた資料）。取り込めるブラウザ保存版だけに出す（presets.js） -->
   <div id="samples" class="catalog" hidden></div>
+  <!-- 分類での絞り込み。分類を付けた資料があるときだけ books.js が出す。datalist は分類の入力欄の候補 -->
+  <div id="category-bar" class="category-bar" role="group" aria-label="資料の分類" hidden></div>
+  <datalist id="category-options"></datalist>
   <div id="book-list"></div>
   <p id="no-match" class="empty" hidden>条件に合う資料はありません。</p>
 </section>

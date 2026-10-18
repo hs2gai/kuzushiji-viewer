@@ -498,6 +498,7 @@ def list_books():
     opened = store.list_opened_books()
     page_counts = store.list_page_counts()
     metadata = store.list_metadata()
+    categories = store.list_book_categories()
     books = []
     for key, pages in grouped.items():
         pages.sort(key=lambda p: p.get('page') or 0)
@@ -512,6 +513,7 @@ def list_books():
             'name': names.get(key) or default,
             'renamed': key in names,
             'default_name': default,
+            'category': categories.get(key, ''),
             'bytes': sizes.get(key, 0),
             'updated_at': max((p['created_at'] for p in pages), default=start.get('added_at', '')),
             'added_at': min([p['created_at'] for p in pages] + ([start['added_at']] if start else []), default=''),
@@ -536,6 +538,17 @@ class RenameRequest(BaseModel):
 def rename_book(key: str, req: RenameRequest):
     store.set_book_name(key, req.name.strip())
     return {'key': key, 'name': req.name.strip()}
+
+
+class CategoryRequest(BaseModel):
+    category: str = Field(max_length=40)
+
+
+# 資料の分類（空文字で外す）
+@app.put('/api/books/{key}/category')
+def set_book_category(key: str, req: CategoryRequest):
+    store.set_book_category(key, req.category.strip())
+    return {'key': key, 'category': req.category.strip()}
 
 
 class MetadataRequest(BaseModel):
@@ -598,6 +611,7 @@ def delete_book(key: str):
     if item_ids:
         store.delete_pages(item_ids)
     store.delete_book_name(key)
+    store.set_book_category(key, None)
     store.delete_added_book(key)
     store.delete_opened_book(key)
     store.delete_metadata(key)
@@ -914,11 +928,12 @@ def run_book_job(job, key):
 class BookJobRequest(BaseModel):
     steps: list[Literal['ocr', 'correct', 'interpret']]  # 行う処理（翻刻・校正・解説）
     redo: bool = False  # True なら校正済み・解説済みのページも作り直す
+    pages: list[int] | None = Field(None, max_length=10000)  # 処理するページ（ビューアで選んだコマ）。省略で全ページ
 
 
 @app.post('/api/books/{key}/job')
 def start_book_job(key: str, req: BookJobRequest):
-    """資料の全ページを処理するジョブを開始する。実行中ならその状態を返す。"""
+    """資料の全ページ（pages を渡せばそのページだけ）を処理するジョブを開始する。実行中ならその状態を返す。"""
     if book_job_state(key)['status'] == 'running':
         return book_job_state(key)
     if set(req.steps) - {'ocr'}:
@@ -929,6 +944,11 @@ def start_book_job(key: str, req: BookJobRequest):
         pages = sorted(p['page'] for p in store.list_pages(limit=None) if book_key(p) == key)
         if not pages:
             raise HTTPException(400, '翻刻済みのページがありません。先に翻刻してください')
+    if req.pages is not None:
+        chosen = set(req.pages)
+        pages = [p for p in pages if p in chosen]
+        if not pages:
+            raise HTTPException(400, '選んだページがありません')
     with jobs_lock:
         job = book_jobs[key] = {'status': 'running', 'steps': req.steps, 'redo': req.redo, 'pages': pages, 'total': len(pages),
                                 'done': 0, 'failed': [], 'running': set(), 'cancel': False, 'started_at': time.time()}

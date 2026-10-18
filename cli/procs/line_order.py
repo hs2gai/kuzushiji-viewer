@@ -23,7 +23,6 @@ class LineOrderProcess(BaseInferenceProcess):
             実行される順序を表す数値。
         """
         super().__init__(cfg, pid, '_line_order')
-        #from src.reading_order.tools.eval import infer_with_cli
         from src.reading_order.tools.process import InferencerWithCLI
         self._inferencer = InferencerWithCLI(self.cfg['kotenseki_reading_order'])
         #self._run_src_inference = infer_with_cli

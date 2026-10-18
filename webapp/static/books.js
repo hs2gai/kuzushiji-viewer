@@ -8,6 +8,7 @@ const ui = {
   list: $('#book-list'), summary: $('#summary'), confirm: $('#confirm'), confirmText: $('#confirm-text'), confirmButtons: $('#confirm-buttons'),
   confirmCheckRow: $('#confirm-check-row'), confirmCheck: $('#confirm-check'), confirmCheckLabel: $('#confirm-check-label'),
   filter: $('#filter'), sort: $('#sort'), noMatch: $('#no-match'), file: $('#file'), notice: $('#notice'),
+  categoryBar: $('#category-bar'), categoryOptions: $('#category-options'),
 };
 // フッターのリンク（backend.footerLink: {url, label}。言語によらず同じ表記）
 if (backend.footerLink) {
@@ -77,6 +78,7 @@ function renderBook(book) {
   const card = el('article', { className: 'book' });
   const ident = book.key.split(':').slice(1).join(':');
   card.dataset.search = `${book.name} ${ident}`;  // 資料名と ID（NDL は pid）
+  card.dataset.category = book.category || '';  // 分類を持つ前に保存した一覧には無い
 
   // サムネとタイトルからも資料を開ける（「開く」ボタンと同じリンク）
   card.append(el('a', { className: 'cover', href: book.url, title: t('開く'), tabIndex: -1 }, [book.thumb
@@ -88,6 +90,7 @@ function renderBook(book) {
     el('div', { className: 'title-row' }, [el('h2', {}, [el('a', { className: 'name', href: book.url, textContent: book.name })]), rename]),
     el('div', { className: 'meta' }, [
       el('span', { className: `kind ${book.kind}`, textContent: book.kind === 'ndl' ? `NDL ${ident}` : t(KIND_LABEL[book.kind]) }),
+      categoryButton(book.category, [book]),
       el('span', { textContent: t('OCR 済み {n} {unit}', { n: book.pages.length, unit }) }),
       el('span', { textContent: t('解説 {n} 件', { n: book.pages.filter((p) => p.interpreted).length }) }),
       canRunJob ? el('span', { textContent: t('校正 {n} 件', { n: book.pages.filter((p) => p.corrected).length }) }) : '',
@@ -263,6 +266,154 @@ function startRename(card, book) {
   });
 }
 
+// ---------- 分類（料理書・読み物など。利用者が付ける）----------
+// 分類のボタン。押すとその場で入力欄に切り替える（Enter で保存、Esc・取消で元に戻す）。
+// books を複数渡すと（シリーズ）、全冊に同じ分類を付ける
+function categoryButton(category, books) {
+  const button = el('button', { type: 'button', className: `category${category ? '' : ' empty'}`, textContent: category || t('＋分類'), title: t('分類を設定') });
+  button.addEventListener('click', () => startCategory(button, category, books));
+  return button;
+}
+
+function startCategory(button, category, books) {
+  const input = el('input', { type: 'text', value: category, placeholder: t('分類（空欄で外す）'), maxLength: 40 });
+  input.setAttribute('list', 'category-options');  // 付けたことのある分類を候補に出す
+  const save = iconButton('button', 'save', t('保存'));
+  const cancel = iconButton('button', 'cancel', t('取消'), { type: 'button' });
+  const form = el('form', { className: 'category-form' }, [input, save, cancel]);
+  button.hidden = true;
+  button.after(form);
+  input.focus();
+  input.select();
+
+  const close = () => { form.remove(); button.hidden = false; };
+  cancel.addEventListener('click', close);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    save.disabled = true;
+    try {
+      for (const book of books) await backend.setBookCategory(book.key, input.value);
+    } catch (err) { setStatus(err.message, true); save.disabled = false; return; }
+    load();
+  });
+}
+
+// 分類での絞り込み（選んだものはブラウザに保存する）。'' はすべて、UNCATEGORIZED は分類の無い資料だけ
+const CATEGORY_KEY = 'books.category';
+const UNCATEGORIZED = '\u0000';
+let selectedCategory = loadSetting(CATEGORY_KEY) || '';
+
+// 分類ごとの件数のボタンを並べる。分類を付けた資料が無ければ出さない
+function renderCategoryBar(books) {
+  const counts = new Map();
+  for (const b of books) if (b.category) counts.set(b.category, (counts.get(b.category) || 0) + 1);
+  const names = [...counts.keys()].sort((a, b) => a.localeCompare(b, 'ja'));
+  ui.categoryOptions.replaceChildren(...names.map((name) => el('option', { value: name })));
+  ui.categoryBar.hidden = !names.length;
+  const uncategorized = books.length - [...counts.values()].reduce((sum, n) => sum + n, 0);
+  if (!names.length || (selectedCategory && selectedCategory !== UNCATEGORIZED && !counts.has(selectedCategory))
+    || (selectedCategory === UNCATEGORIZED && !uncategorized)) selectedCategory = '';
+  const chips = [['', t('すべて'), books.length], ...names.map((name) => [name, name, counts.get(name)])];
+  if (uncategorized) chips.push([UNCATEGORIZED, t('未分類'), uncategorized]);
+  ui.categoryBar.replaceChildren(...chips.map(([value, label, n]) => {
+    const chip = el('button', { type: 'button', className: 'chip', textContent: `${label} ${n}` });
+    chip.setAttribute('aria-pressed', String(value === selectedCategory));
+    chip.addEventListener('click', () => {
+      selectedCategory = value;
+      saveSetting(CATEGORY_KEY, value);
+      ui.categoryBar.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      applyFilter();
+    });
+    return chip;
+  }));
+}
+
+// ---------- シリーズ（同じ名前で巻数だけ違う資料。「大晦日曙草紙 1」〜「6」など）----------
+// 名前の末尾の巻数（1・二・巻5・[3] など）を除いた部分が同じ資料が 2 冊以上あれば、1 枚のカードにまとめる。
+// 名前は、付けた名前、無ければ NDL の書名、それも無ければ既定の名前
+const VOLUME = /^(.+?)[\s.:・_-]*[[(]?(?:巻|第)?([0-9]{1,3}|[一二三四五六七八九十]{1,3})(?:巻|冊|編|号)?[\])]?$/;
+const KANJI_DIGITS = '〇一二三四五六七八九';
+const SERIES_OPEN_KEY = 'books.seriesOpen';
+const openSeries = new Set(JSON.parse(loadSetting(SERIES_OPEN_KEY) || '[]'));
+
+function kanjiNumber(text) {
+  let total = 0, digit = 0;
+  for (const c of text) {
+    if (c === '十') { total += (digit || 1) * 10; digit = 0; } else digit = KANJI_DIGITS.indexOf(c);
+  }
+  return total + digit;
+}
+
+function displayName(book) {
+  const title = !book.renamed && book.metadata && biblioRows(book.metadata).find(([label]) => label === '書名')?.[1];
+  return title || book.name;
+}
+
+// 名前から {base: シリーズ名, volume: 巻数} を取り出す。巻数が無ければ null
+function volumeOf(name) {
+  const m = name.normalize('NFKC').match(VOLUME);
+  const base = m?.[1].replace(/[\s.:・_-]+$/, '');
+  return base ? { base, volume: /^\d+$/.test(m[2]) ? Number(m[2]) : kanjiNumber(m[2]) } : null;
+}
+
+// 並べた資料を、資料かシリーズ（{base, books}）の並びにする。シリーズは最初の 1 冊の位置に置き、中は巻数の順
+function groupSeries(books) {
+  const byBase = new Map();
+  for (const book of books) {
+    const v = volumeOf(displayName(book));
+    if (v) (byBase.get(v.base) || byBase.set(v.base, []).get(v.base)).push({ book, volume: v.volume });
+  }
+  const seriesOf = new Map();
+  for (const [base, list] of byBase) {
+    if (list.length < 2) continue;
+    const series = { base, books: list.sort((a, b) => a.volume - b.volume).map((v) => v.book) };
+    series.books.forEach((b) => seriesOf.set(b.key, series));
+  }
+  const items = [];
+  for (const book of books) {
+    const series = seriesOf.get(book.key);
+    if (!series) items.push(book);
+    else if (!items.includes(series)) items.push(series);
+  }
+  return items;
+}
+
+// シリーズのカード。見出しを押すと各冊のカードを開閉する（開閉の状態はブラウザに保存する）
+function renderSeries(series) {
+  const first = series.books[0];
+  const categories = new Set(series.books.map((b) => b.category));
+  const body = el('div', { className: 'series-books' }, series.books.map(renderBook));
+  const toggle = el('button', { type: 'button', className: 'series-toggle', textContent: series.base, title: t('各冊を表示・隠す') });
+  const box = el('section', { className: 'series' }, [
+    el('div', { className: 'series-head' }, [
+      el('div', { className: 'cover' }, [first.thumb ? el('img', { src: first.thumb, alt: '', loading: 'lazy' }) : el('div', { className: 'noimg' })]),
+      el('div', {}, [
+        el('h2', {}, [toggle]),
+        el('div', { className: 'meta' }, [
+          el('span', { className: 'kind series-count', textContent: t('{n} 冊', { n: series.books.length }) }),
+          categoryButton(categories.size === 1 ? first.category : '', series.books),
+          el('span', { textContent: series.books.reduce((max, b) => (b.updated_at > max ? b.updated_at : max), '').replace('T', ' ') }),
+        ]),
+      ]),
+    ]),
+    body,
+  ]);
+  const setOpen = (open) => {
+    box.dataset.open = String(open);
+    toggle.setAttribute('aria-expanded', String(open));
+    body.hidden = !open;
+  };
+  setOpen(openSeries.has(series.base));
+  toggle.addEventListener('click', () => {
+    const open = box.dataset.open !== 'true';
+    setOpen(open);
+    if (open) openSeries.add(series.base); else openSeries.delete(series.base);
+    saveSetting(SERIES_OPEN_KEY, JSON.stringify([...openSeries]));
+  });
+  return box;
+}
+
 // 翻刻を1冊1ファイルのテキストに書き出す。ページごとに見出しを付け、行は読み順に改行で区切る
 async function downloadText(book) {
   const unit = UNIT_LABEL[book.kind][lang];
@@ -318,14 +469,21 @@ async function deleteBook(book) {
 // 全角・半角や大文字・小文字の違いを無視し、空白区切りの語をすべて含む資料だけを残す
 const normalize = (text) => text.normalize('NFKC').toLowerCase();
 
+// 分類を選んでいれば、その分類の資料だけを残す。シリーズは残った冊があれば出し、語で絞り込んでいる間は閉じていても各冊を見せる
 function applyFilter() {
   const terms = normalize(ui.filter.value).split(/\s+/).filter(Boolean);
+  const inCategory = (card) => !selectedCategory
+    || (selectedCategory === UNCATEGORIZED ? !card.dataset.category : card.dataset.category === selectedCategory);
   const cards = [...ui.list.querySelectorAll('.book')];
   let shown = 0;
   for (const card of cards) {
     const text = normalize(card.dataset.search);
-    card.hidden = !terms.every((t) => text.includes(t));
+    card.hidden = !inCategory(card) || !terms.every((t) => text.includes(t));
     if (!card.hidden) shown++;
+  }
+  for (const series of ui.list.querySelectorAll('.series')) {
+    series.hidden = !series.querySelector('.book:not([hidden])');
+    series.querySelector('.series-books').hidden = series.dataset.open !== 'true' && !terms.length;
   }
   ui.noMatch.hidden = !cards.length || shown > 0;
 }
@@ -360,9 +518,11 @@ function renderList(books) {
   if (!books.length) {
     ui.list.append(el('p', { className: 'empty', textContent: t('まだ資料がありません。上の検索やおすすめから追加するか、ビューアで NDL の資料・画像・PDF を開いてください。') }));
     ui.summary.textContent = '';
+    ui.categoryBar.hidden = true;
     return;
   }
-  books.forEach((b) => ui.list.append(renderBook(b)));
+  renderCategoryBar(books);
+  groupSeries(books).forEach((item) => ui.list.append(item.books ? renderSeries(item) : renderBook(item)));
   applyFilter();
   const bytes = books.reduce((sum, b) => sum + b.bytes, 0);
   const pages = books.reduce((sum, b) => sum + b.pages.length, 0);

@@ -24,7 +24,32 @@ body.dragging .upload::after { content: '（ここにドロップ）'; font-size
 #search-summary { margin: 0 0 8px; }
 .row.center { justify-content: center; margin-top: 8px; }
 
-#book-list { padding: 10px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; align-content: start; }
+#book-list, .series-books { padding: 10px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; align-content: start; }
+
+/* 分類での絞り込み（books.js）。選んでいる分類を塗る */
+.category-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.category-bar .chip { font: inherit; font-size: 12.5px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: #fff; color: var(--text); cursor: pointer; }
+.category-bar .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* 資料・シリーズのカードの分類。付いていなければ「＋分類」を控えめに出す */
+.meta .category { font: inherit; font-size: 11px; padding: 0 6px; border: 1px solid var(--accent-soft); border-radius: 999px; background: var(--accent-soft); color: var(--accent); cursor: pointer; }
+.meta .category.empty { background: transparent; border-style: dashed; border-color: var(--border); color: #9a9086; }
+.meta .category-form { display: flex; gap: 4px; }
+.meta .category-form input { width: 140px; height: 24px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; font: inherit; font-size: 12.5px; }
+.meta .category-form .icon-btn { width: 24px; height: 24px; padding: 0; }
+
+/* シリーズ（同じ名前で巻数だけ違う資料をまとめたカード）。閉じているときは資料のカードと同じ大きさで、開くと一覧の幅いっぱいに各冊のカードを並べる */
+.series { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.series[data-open="true"] { grid-column: 1 / -1; padding-bottom: 0; }
+.series-head { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; }
+.series-head img { width: 64px; height: 80px; object-fit: cover; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+.series-head .noimg { width: 64px; height: 80px; border: 1px dashed var(--border); border-radius: 4px; }
+.series-head h2 { font-size: 16px; margin: 0 0 4px; }
+.series-toggle { font: inherit; padding: 0; border: none; background: none; color: inherit; cursor: pointer; text-align: left; }
+.series-toggle::after { content: ' ▸'; color: #9a9086; }
+.series-toggle[aria-expanded="true"]::after { content: ' ▾'; }
+.series-toggle:hover { color: var(--accent); }
+.series-count { color: var(--text); }
+.series .book { background: #fff; }
 
 /* 検索結果・おすすめの小さなカード */
 .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; margin-top: 8px; }
@@ -68,7 +93,7 @@ body.dragging .upload::after { content: '（ここにドロップ）'; font-size
 .book .name:hover { color: var(--accent); text-decoration: underline; }
 .book .cover { display: block; line-height: 0; }
 .book .cover:hover img { border-color: var(--accent); }
-.book .meta { font-size: 12.5px; color: #6b6259; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.book .meta, .series .meta { font-size: 12.5px; color: #6b6259; display: flex; flex-wrap: wrap; gap: 4px 10px; }
 /* NDL 資料の書誌情報（書名・著者・出版者・出版年） */
 .biblio { margin: 6px 0 0; font-size: 12.5px; display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; }
 .biblio dt { color: #6b6259; }
@@ -126,5 +151,7 @@ button.danger, .book .actions button.danger { color: var(--accent); border-color
   .book img, .book .noimg { width: 48px; height: 60px; }
   /* 操作アイコンはカードの最上段に並べる */
   .book .actions { grid-column: 1 / -1; order: -1; flex-direction: row; flex-wrap: wrap; }
-  #book-list, .catalog { grid-template-columns: 1fr; }
+  #book-list, .series-books, .catalog { grid-template-columns: 1fr; }
+  .series-head { grid-template-columns: 48px 1fr; }
+  .series-head img, .series-head .noimg { width: 48px; height: 60px; }
 }

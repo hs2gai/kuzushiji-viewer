@@ -92,7 +92,8 @@ header #page-select { width: 28px; }
 }
 #status.error { background: #f8d7da; border-color: #e3a4ab; white-space: pre-wrap; pointer-events: auto; cursor: pointer; }
 
-main { flex: 1; display: grid; grid-template-columns: 1fr 380px; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+/* パネルの幅（--panel-w）は左端のドラッグで変えられる（app.js）。画像の欄が狭くなりすぎないよう 300px は残す */
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) min(var(--panel-w, 380px), calc(100% - 300px)); grid-template-rows: minmax(0, 1fr); min-height: 0; }
 
 #viewer { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .toolbar { padding: 6px 14px; font-size: 13px; border-bottom: 1px solid var(--border); background: var(--panel); }
@@ -156,6 +157,10 @@ button.icon { width: 26px; height: 26px; padding: 0; line-height: 1; font-size: 
 .thumb img { width: 62px; height: 62px; object-fit: contain; background: var(--bg); }
 .thumb:not([data-state="done"]) img { visibility: hidden; }  /* 読み込み前・失敗時は枠だけ出す */
 .thumb.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--accent); }
+/* まとめて解説に回すために選んだコマ（app.js） */
+.thumb.selected { border-color: #2f6db3; box-shadow: 0 0 0 2px #2f6db3; background: #e8f0fa; }
+#batch-status { margin: 6px 0 0; padding: 4px 8px; border-radius: 4px; background: #e8f0fa; color: #2f4f7a; }
+#batch-cancel { font-size: 12px; padding: 0 8px; }
 .thumb:hover { border-color: var(--accent); }
 /* 翻刻の状態（app.js の markThumb）をコマ番号の横に出す */
 .thumb[data-ocr="queued"] span::after { content: ' 待ち'; }
@@ -170,7 +175,11 @@ button.icon { width: 26px; height: 26px; padding: 0; line-height: 1; font-size: 
 }
 #thumb-preview img { display: block; height: 160px; }  /* 幅は app.js が縦横比から決める */
 
-#panel { display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--panel); min-height: 0; }
+#panel { position: relative; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--panel); min-height: 0; }
+/* パネルの左端のつまみ。境界線の上に細く重ね、マウスを乗せたとき・ドラッグ中に色を付ける */
+#panel-resizer { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 5; cursor: col-resize; touch-action: none; }
+#panel-resizer:hover, #panel-resizer:focus-visible, body.resizing #panel-resizer { background: var(--accent-soft); outline: none; }
+body.resizing { cursor: col-resize; user-select: none; }
 .tabs { display: flex; border-bottom: 1px solid var(--border); }
 .tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px; }
 .tabs button.active { border-bottom-color: var(--accent); color: var(--accent); }
@@ -212,6 +221,7 @@ header #notice { margin: 0; }
   #stage { display: block; }
   #canvas-wrap { overflow: visible; padding: 6px; }
   #panel { display: block; border-left: 0; border-top: 1px solid var(--border); }
+  #panel-resizer { display: none; }  /* 縦に並べるので幅は変えない */
   .tab { overflow: visible; }
 }
 

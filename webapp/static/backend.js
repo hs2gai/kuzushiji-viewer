@@ -41,6 +41,10 @@ const backend = {
   renameBook: (key, name) => api(`/api/books/${encodeURIComponent(key)}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
   }),
+  // 資料の分類（料理書・読み物など。空文字で外す）
+  setBookCategory: (key, category) => api(`/api/books/${encodeURIComponent(key)}/category`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category }),
+  }),
   deleteBook: (key) => api(`/api/books/${encodeURIComponent(key)}`, { method: 'DELETE' }),
   // 資料のメタデータ（NDL の書誌情報。[[項目, 値], ...]）。保存が無ければ metadata は null
   getMetadata: async (key) => (await api(`/api/books/${encodeURIComponent(key)}/metadata`)).metadata,
@@ -51,10 +55,10 @@ const backend = {
   getBookPages: (key) => api(`/api/books/${encodeURIComponent(key)}/pages`),
 
   // 資料の全ページの一括処理（steps に入れた翻刻 'ocr'・校正 'correct'・解説 'interpret' を行う。校正・解説はサーバーで claude -p）。
-  // redo なら校正済み・解説済みのページも作り直す。
+  // redo なら校正済み・解説済みのページも作り直す。pages（ページ番号の配列）を渡せば、そのページだけ行う。
   // 状態 = {status: 'none'|'running'|'done'|'canceled', steps, redo, total, done, failed: [{page, error}], running: [page], elapsed}
   getBookJob: (key) => api(`/api/books/${encodeURIComponent(key)}/job`),
-  startBookJob: (key, steps, redo) => postJson(`/api/books/${encodeURIComponent(key)}/job`, { steps, redo }),
+  startBookJob: (key, steps, redo, pages) => postJson(`/api/books/${encodeURIComponent(key)}/job`, { steps, redo, pages }),
   cancelBookJob: (key) => api(`/api/books/${encodeURIComponent(key)}/job`, { method: 'DELETE' }),
 
   // 解説（server 方式）。状態 = {status: 'none'|'queued'|'running'|'done'|'error', markdown, phase, elapsed, cached, error}
